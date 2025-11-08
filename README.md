@@ -17,7 +17,7 @@ Tiny PyTorch codebase for playing with transformer attention on simple BEV (bird
   - patch embedding: 4×4 → 8×8 = 64 patches  
   - 2 encoder layers, 2 heads, 64-dim embeddings
 - Uses **object queries + soft-argmax** detection head:
-  - predicts object centers (x, y in [0,1])
+  - predicts object centers (x, y in [0, 1])
   - predicts class (car vs pedestrian)
 - Exposes internal **self-attention maps** so you can:
   - overlay them on the BEV grid
@@ -150,9 +150,7 @@ python temperature_study.py
 
 This script evaluates the trained model across temperatures
 
-[
-T \in {0.1,; 0.5,; 1.0,; 2.0,; 5.0}
-]
+`T ∈ {0.1, 0.5, 1.0, 2.0, 5.0}`
 
 and writes:
 
@@ -235,11 +233,11 @@ Defined in `model/transformer.py`.
     * FFN: `64 → 128 → 64`
     * residual + LayerNorm
 
-Attention implementation lives in `model/attention.py`:
+Attention implementation lives in `model/attention.py` and follows the usual scaled dot-product form:
 
-[
-\text{Attention}(Q,K,V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k} \cdot T}\right)V
-]
+```text
+Attention(Q, K, V) = softmax( (Q K^T) / (sqrt(d_k) * T) ) V
+```
 
 where `T` is the **temperature** parameter exposed all the way up to `visualize.py` and `temperature_study.py`.
 
@@ -256,23 +254,33 @@ Defined in `model/detection.py`.
 
   1. Project query / patch features:
 
-     * `Q = W_q * query`
-     * `K = W_k * features`
-     * `V = W_v * features`
+     ```text
+     Q = W_q * query
+     K = W_k * features
+     V = W_v * features
+     ```
+
   2. Compute scores and attention over **patches**:
-     [
-     \alpha_{q,p} = \text{softmax}_p \left( \frac{Q_q K_p^\top}{\sqrt{d}} \right)
-     ]
+
+     ```text
+     alpha_{q,p} = softmax_p( (Q_q K_p^T) / sqrt(d) )
+     ```
+
   3. Build a **context vector**:
-     [
-     c_q = \sum_p \alpha_{q,p} V_p
-     ]
+
+     ```text
+     c_q = sum_p alpha_{q,p} * V_p
+     ```
+
   4. Compute the **center** using a soft-argmax over patch centers:
-     [
-     \hat{\mathbf{x}}*q = \sum_p \alpha*{q,p} \mathbf{u}_p
-     ]
-     where (\mathbf{u}_p) is the normalized (x, y) of patch `p`.
-  5. Class logits from context via a small MLP.
+
+     ```text
+     x_hat_q = sum_p alpha_{q,p} * u_p
+     ```
+
+     where `u_p` is the normalized (x, y) of patch `p`.
+
+  5. Get class logits from context via a small MLP.
 
 Outputs:
 
@@ -287,19 +295,17 @@ Loss is defined in `train.py` as `DetectionLoss`:
 
 * **Center loss** – MSE over valid slots:
 
-  [
-  \mathcal{L}*{\text{center}} = \frac{1}{N*{\text{valid}}}
-  \sum_{i \in \text{valid}} |\hat{\mathbf{x}}_i - \mathbf{x}_i|_2^2
-  ]
+  ```text
+  L_center = (1 / N_valid) * sum_{i in valid} ||x_hat_i - x_i||^2
+  ```
 
 * **Class loss** – cross-entropy over valid slots.
 
-* Total:
+* **Total loss**:
 
-  [
-  \mathcal{L} = \lambda_{\text{center}} \mathcal{L}*{\text{center}} +
-  \lambda*{\text{class }} \mathcal{L}_{\text{class}}
-  ]
+  ```text
+  L = lambda_center * L_center + lambda_class * L_class
+  ```
 
 Optimizer: `Adam(lr=1e-3, weight_decay=1e-4)`.
 
@@ -346,7 +352,7 @@ A few easy knobs to play with:
 * **Temperature ranges** – adjust `TEMPERATURES` in `temperature_study.py`.
 * **More heads / layers** – the code will automatically visualize all heads for the chosen layer.
 
-Potential extensions if you want to push the idea:
+Potential extensions:
 
 * Add a **decoder** and make it closer to DETR-style detection.
 * Swap synthetic rectangles for more complex shapes (e.g., Gaussian blobs).
